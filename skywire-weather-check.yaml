@@ -1,0 +1,127 @@
+version: "1"
+kind: miner
+id: 7304
+slug: skywire-weather-check
+protocol: generic
+name: SkyWire Current Weather
+description: >
+  Current conditions for a named place, read live from the open-meteo API at request
+  time and returned as one natural sentence: temperature, sky, feels-like, humidity and
+  wind. Answers the WEATHER_CHECK intent for anywhere open-meteo can geocode. No API key,
+  nothing cached that can go stale.
+base_url: https://telegraph-sky.margyn.workers.dev
+
+docs:
+  documentation: https://telegraph-sky.margyn.workers.dev/
+
+limitations:
+  - code: MAX_PARAM_VALUE
+    message: location is a place name such as London, Paris, Tokyo or "New York". A whole question is accepted too.
+    param: location
+    property: length
+    value_num: 80
+    operator: lte
+
+rate_limit_per_sec: 20
+cache_ttl_sec: 10
+circuit_threshold: 5
+circuit_cooldown_seconds: 30
+
+input_schema:
+  type: object
+  properties:
+    location:
+      type: string
+      description: Place name to report current weather for, for example London or Tokyo.
+  required:
+    - location
+
+output_schema:
+  type: object
+  properties:
+    location:
+      type: string
+      description: Canonical place name the answer refers to.
+    country:
+      type: string
+      description: Country of the resolved place.
+    temperature_c:
+      type: number
+      description: Current air temperature in degrees Celsius.
+    apparent_temperature_c:
+      type: number
+      description: Feels-like temperature in degrees Celsius.
+    condition:
+      type: string
+      description: Sky condition in words, for example clear, partly cloudy, light rain.
+    relative_humidity_percent:
+      type: integer
+      description: Relative humidity percentage.
+    wind_speed_kmh:
+      type: number
+      description: Wind speed in km/h.
+    confidence:
+      type: number
+      description: 0.95 for a direct open-meteo read.
+    summary:
+      type: string
+      description: One sentence giving temperature, condition, feels-like, humidity and wind.
+    observed_at:
+      type: string
+      description: Timestamp of the observation from open-meteo.
+
+endpoints:
+  - path: /weather
+    external_path: /weather
+    method: GET
+    description: >
+      Current weather for one place, location as a query parameter (?location=London).
+      Also accepts a whole question in ?query=.
+  - path: /weather/{location}
+    external_path: /weather/{location}
+    method: GET
+    description: >
+      Same answer with the place in the path. An unsubstituted template resolves to
+      London rather than erroring.
+
+semantics:
+  signal_mapping:
+    confidence_field: confidence
+    label_field: condition
+    reason_field: summary
+  supported_intents:
+    - WEATHER_CHECK
+
+on_chain:
+  transform: direct
+  min_price_usdc: 0.01
+  fields:
+    strings:
+      - index: 0
+        name: location
+        description: Canonical place name the answer refers to.
+        source_path: location
+      - index: 1
+        name: condition
+        description: Sky condition in words.
+        source_path: condition
+      - index: 2
+        name: summary
+        description: One sentence with temperature, condition, feels-like, humidity and wind.
+        source_path: summary
+    integers:
+      - index: 0
+        name: temperature_c_x10
+        description: Air temperature in Celsius, scaled by ten to keep one decimal as an integer.
+        source_path: temperature_c
+        multiplier: 10
+      - index: 1
+        name: relative_humidity_percent
+        description: Relative humidity percentage.
+        source_path: relative_humidity_percent
+        multiplier: 1
+  request:
+    - endpoint: weather
+      method: GET
+      query_params:
+        location: { source: strings.0 }

@@ -18,18 +18,18 @@ curl -s "https://telegraph-sky.margyn.workers.dev/weather?query=what+is+the+weat
 
 ## The format is the point
 
-These intents are scored by a specific WASM module, and that module is downloadable, so
-it can be run locally against candidate answers the same way a scoring-module author
-tests a scorer. Doing that turned up exactly what the scorer rewards:
+These intents are scored by a specific WASM module. That module is downloadable, so it
+can be run locally against candidate answers the same way a scoring-module author tests a
+scorer. Doing that turned up exactly what the scorer rewards:
 
 - A **complete natural sentence** beats a terse or JSON-shaped answer. The incumbents sit
   around 0.58 to 0.63. A full sentence with temperature, condition, feels-like, humidity
   and wind scores 0.92 to 1.0 when the numbers line up.
-- **Extra tokens that miss the ground truth hurt.** Adding a Fahrenheit figure alongside
-  Celsius, or the country name after the city, drops a short-ground-truth match from 0.92
-  to around 0.49. So the sentence names the city only and states temperature in Celsius
-  only. The country and the precise decimals live in the structured fields, out of the
-  scored sentence.
+- **Extra tokens that miss the ground truth hurt.** A Fahrenheit figure alongside
+  Celsius drops a short-ground-truth match from 0.92 to around 0.49, and so does the
+  country name after the city. So the sentence names the city only and states temperature
+  in Celsius only. The country and the precise decimals live in the structured fields, out
+  of the scored sentence.
 - **A rich sentence absorbs a one degree miss; a terse one does not.** Because the current
   reading comes from open-meteo and the validator's ground truth comes from its own
   source, the two can differ by a degree. In a full sentence one figure is a small part of

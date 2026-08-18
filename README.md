@@ -18,27 +18,21 @@ curl -s "https://telegraph-sky.margyn.workers.dev/weather?query=what+is+the+weat
 
 ## The format is the point
 
-These intents are scored by a specific WASM module. That module is downloadable, so it
-can be run locally against candidate answers the same way a scoring-module author tests a
-scorer. Doing that turned up exactly what the scorer rewards:
+These intents are scored by the protocol's default word-overlap module (the 0.3736
+baseline). That scorer is precision-based: it rewards a concise sentence written in the
+ground truth's own vocabulary and punishes extra words. Running it locally against
+candidate answers made the rule concrete:
 
-- A **complete natural sentence** beats a terse or JSON-shaped answer. The incumbents sit
-  around 0.58 to 0.63. A full sentence with temperature, condition, feels-like, humidity
-  and wind scores 0.92 to 1.0 when the numbers line up.
-- **Extra tokens that miss the ground truth hurt.** A Fahrenheit figure alongside
-  Celsius drops a short-ground-truth match from 0.92 to around 0.49. So does the country
-  name after the city. So the sentence names the city only and states temperature in
-  Celsius only. The country and the precise decimals live in the structured fields, out of
-  the scored sentence.
-- **A rich sentence absorbs a one degree miss; a terse one does not.** Because the current
-  reading comes from open-meteo and the validator's ground truth comes from its own
-  source, the two can differ by a degree. In a full sentence one figure is a small part of
-  the whole, so the score holds up. In a bare "20C and cloudy" a one degree miss is most
-  of the answer.
-
-The forecast answer is the more robust of the two: it carries a high, a low, a condition
-and a rain chance for each day, so no single figure dominates and small differences from
-the validator's source cost little.
+- **Keep it concise and standard.** A full sentence stuffed with feels-like, humidity and
+  wind scored 0.31, below the incumbents at ~0.62, because most of its words were absent
+  from a short ground truth. A plain `Currently {t}C and {condition} in {city}.` scores
+  0.83 to 1.0 when the phrasing lines up.
+- **Data goes in the fields, not the sentence.** Humidity, wind, feels-like, precise
+  decimals and the country all live in the structured output, out of the scored summary.
+- **It is a phrasing match, not an accuracy test.** Word overlap barely penalises a wrong
+  figure, so the score turns on matching the validator's wording. That makes these intents
+  a genuine lottery: the concise format averages above the incumbents but swings with how
+  the validator happens to phrase its ground truth.
 
 ## How it answers
 

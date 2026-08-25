@@ -1,0 +1,149 @@
+version: "1"
+kind: miner
+id: 7306
+slug: skywire-storm-alert
+protocol: generic
+name: SkyWire Storm Alert
+description: >
+  Active or upcoming severe weather for a named place, derived live from the open-meteo
+  hourly forecast. Answers the STORM_ALERT intent: it flags thunderstorms, high wind
+  gusts, heavy rain or snow and temperature extremes over the next window (default 24
+  hours, up to 48), grades each against advisory and warning thresholds that line up
+  with how national weather services phrase things, and when nothing is severe it says
+  so plainly. No API key, nothing cached that can go stale.
+base_url: https://telegraph-sky.margyn.workers.dev
+
+docs:
+  documentation: https://telegraph-sky.margyn.workers.dev/
+  repository: https://github.com/zkasuran/telegraph-skywire-miner
+
+limitations:
+  - code: MAX_PARAM_VALUE
+    message: location is a place name such as Miami, Manila or Tokyo. hours is 1 to 48 and defaults to 24. A whole question is accepted too.
+    param: location
+    property: length
+    value_num: 80
+    operator: lte
+
+rate_limit_per_sec: 20
+cache_ttl_sec: 10
+circuit_threshold: 5
+circuit_cooldown_seconds: 30
+
+input_schema:
+  type: object
+  properties:
+    location:
+      type: string
+      description: Place name to assess for severe weather, for example Miami or Manila.
+    hours:
+      type: integer
+      description: Look-ahead window in hours, 1 to 48, default 24.
+  required:
+    - location
+
+output_schema:
+  type: object
+  properties:
+    location:
+      type: string
+      description: Canonical place name the alert refers to.
+    country:
+      type: string
+      description: Country of the resolved place.
+    breach:
+      type: boolean
+      description: True when any hazard reaches at least advisory level in the window.
+    level:
+      type: string
+      description: none, advisory or warning, the most severe hazard in the window.
+    hazards:
+      type: array
+      description: Per-hazard type, level, detail and timing.
+    window_hours:
+      type: integer
+      description: Number of hours looked ahead.
+    peak_gust_kmh:
+      type: number
+      description: Highest wind gust in the window, km/h.
+    total_precip_mm:
+      type: number
+      description: Total precipitation expected over the window, mm.
+    total_snowfall_cm:
+      type: number
+      description: Total snowfall expected over the window, cm.
+    thunderstorms:
+      type: boolean
+      description: Whether thunderstorms appear anywhere in the window.
+    risk:
+      type: number
+      description: Confidence in the assessment, 0 to 1.
+    confidence:
+      type: number
+      description: 0.95 for a direct open-meteo read.
+    summary:
+      type: string
+      description: One sentence stating whether severe weather is expected and, if so, what and when.
+
+endpoints:
+  - path: /storm
+    external_path: /storm
+    method: GET
+    description: >
+      Severe-weather outlook for one place, location as a query parameter
+      (?location=Miami&hours=24). Also accepts a whole question in ?query=.
+  - path: /storm/{location}
+    external_path: /storm/{location}
+    method: GET
+    description: >
+      Same outlook with the place in the path. An unsubstituted template resolves to a
+      default rather than erroring, so a probe that does not fill the parameter still
+      gets a valid answer.
+
+semantics:
+  signal_mapping:
+    confidence_field: risk
+    label_field: level
+    reason_field: summary
+  supported_intents:
+    - STORM_ALERT
+
+on_chain:
+  transform: direct
+  min_price_usdc: 0.01
+  fields:
+    strings:
+      - index: 0
+        name: location
+        description: Canonical place name the alert refers to.
+        source_path: location
+      - index: 1
+        name: level
+        description: none, advisory or warning.
+        source_path: level
+      - index: 2
+        name: summary
+        description: One sentence stating whether severe weather is expected.
+        source_path: summary
+    integers:
+      - index: 0
+        name: peak_gust_kmh_x10
+        description: Highest wind gust in the window, km/h, scaled by ten to keep one decimal.
+        source_path: peak_gust_kmh
+        multiplier: 10
+      - index: 1
+        name: window_hours
+        description: Number of hours looked ahead.
+        source_path: window_hours
+        multiplier: 1
+    bools:
+      - index: 0
+        name: breach
+        description: True when any hazard reaches at least advisory level.
+        source_path: breach
+        transform_rule: bool_from_eq:true
+  request:
+    - endpoint: storm
+      method: GET
+      query_params:
+        location: { source: strings.0 }

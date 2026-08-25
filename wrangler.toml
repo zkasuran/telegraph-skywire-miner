@@ -1,0 +1,7 @@
+name = "telegraph-sky"
+main = "worker.js"
+compatibility_date = "2025-06-01"
+
+# SkyWire weather miner for Telegraph. Serves WEATHER_CHECK (/weather), WEATHER_FORECAST
+# (/forecast) and STORM_ALERT (/storm) from the open-meteo API, keyless. No secrets, no
+# bindings: deploy is just `wrangler deploy`.

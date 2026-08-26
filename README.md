@@ -21,6 +21,7 @@
 ## Table of Contents
 
 - [Overview](#overview)
+- [Status](#status)
 - [Architecture](#architecture)
 - [Intents](#intents)
 - [Endpoints](#endpoints)
@@ -59,6 +60,30 @@
 - ⚡ **10-second memo** — per-isolate cache prevents stale data while handling burst traffic
 - 🌍 **Global geocoding** — any place name open-meteo can resolve works
 - 📝 **Natural language** — answers are complete sentences, not raw JSON blobs
+
+---
+
+## Status
+
+**Live and registered.** All three intents are deployed on `telegraph-sky.margyn.workers.dev`
+and registered on Base Sepolia under the wallet below. `/health` returns
+`{ ok: true, intents: [...] }`.
+
+Honest competitive standing on the miner leaderboard (snapshot 2026-08-26; re-check live with
+`curl -s https://devnode.telegraphprotocol.com/api/miners`):
+
+| Intent | Network requests | SkyWire rank |
+|--------|------------------|--------------|
+| WEATHER_FORECAST | 941 (the busiest intent on the network) | 3 |
+| WEATHER_CHECK | 620 | 6 |
+| STORM_ALERT | 334 | 2 |
+
+These are the current standings, not a claim of first place. Rank on Telegraph is earned, not
+set: the node routes 70 / 20 / 10 percent of traffic to ranks one, two and three. A
+miner's leaderboard score is a median over the traffic it is actually sent, refreshed on the
+node's own epoch schedule. The answers here score at the top of what the intent's scorer can
+measure (see [Verification](docs/verification.md)), but climbing to rank one is the network's
+to grant as it routes and re-scores over the grace period and beyond.
 
 ---
 
@@ -140,7 +165,7 @@
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/` | Service info and intent listing |
-| `GET` | `/health` | Health check (`{ ok: true }`) |
+| `GET` | `/health` | Health check (`{ ok: true, intents: [...] }`) |
 | `GET` | `/__last` | Ring buffer of the 25 most recent requests |
 
 ---
@@ -230,13 +255,13 @@ Registered on **Base Sepolia** against the Telegraph registry:
 
 ### Registered Descriptors
 
-| Intent | Descriptor File | On-Chain ID |
-|--------|----------------|-------------|
+| Intent | Descriptor File | Miner ID |
+|--------|----------------|----------|
 | `WEATHER_CHECK` | [`skywire-weather-check.yaml`](skywire-weather-check.yaml) | 7304 |
 | `WEATHER_FORECAST` | [`skywire-forecast.yaml`](skywire-forecast.yaml) | 7305 |
 | `STORM_ALERT` | [`skywire-storm-alert.yaml`](skywire-storm-alert.yaml) | 7306 |
 
-Each descriptor defines the input/output schemas, endpoint paths, semantic mappings, and on-chain field encodings for its intent.
+Each descriptor defines the input/output schemas, endpoint paths, semantic mappings, and on-chain field encodings for its intent. The **Miner ID** is the numeric `id` inside the YAML (used in the node's `/engine/v1/ask/{id}` path); the on-chain `registerMiner` call also assigns each one a separate sequential registration ID at registration time.
 
 ---
 
@@ -324,7 +349,8 @@ telegraph-skywire-miner/
 │   ├── deployment.md              # Deployment & operations guide
 │   ├── weather-check.md           # WEATHER_CHECK intent docs
 │   ├── forecast.md                # WEATHER_FORECAST intent docs
-│   └── storm-alert.md             # STORM_ALERT intent docs
+│   ├── storm-alert.md             # STORM_ALERT intent docs
+│   └── verification.md            # Testing, scoring, and what rank means
 ├── LICENSE                        # MIT
 └── README.md                      # You are here
 ```
@@ -340,6 +366,7 @@ telegraph-skywire-miner/
 | [Weather Check](docs/weather-check.md) | `WEATHER_CHECK` intent in detail |
 | [Forecast](docs/forecast.md) | `WEATHER_FORECAST` intent in detail |
 | [Storm Alert](docs/storm-alert.md) | `STORM_ALERT` intent in detail |
+| [Verification](docs/verification.md) | How every answer is tested and scored, and what rank actually means |
 
 ---
 

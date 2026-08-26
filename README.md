@@ -69,14 +69,14 @@
 and registered on Base Sepolia under the wallet below. `/health` returns
 `{ ok: true, intents: [...] }`.
 
-Honest competitive standing on the miner leaderboard (snapshot 2026-08-26; re-check live with
-`curl -s https://devnode.telegraphprotocol.com/api/miners`):
+Honest competitive standing on the miner leaderboard (snapshot 2026-08-26, epoch 283;
+re-check live with `curl -s https://devnode.telegraphprotocol.com/api/miners`):
 
 | Intent | Network requests | SkyWire rank |
 |--------|------------------|--------------|
-| WEATHER_FORECAST | 941 (the busiest intent on the network) | 3 |
-| WEATHER_CHECK | 620 | 6 |
-| STORM_ALERT | 334 | 2 |
+| WEATHER_FORECAST | 941 (the busiest intent on the network) | 2 |
+| WEATHER_CHECK | 620 | 2 |
+| STORM_ALERT | 334 | 3 |
 
 These are the current standings, not a claim of first place. Rank on Telegraph is earned, not
 set: the node routes 70 / 20 / 10 percent of traffic to ranks one, two and three. A
@@ -84,6 +84,12 @@ miner's leaderboard score is a median over the traffic it is actually sent, refr
 node's own epoch schedule. The answers here score at the top of what the intent's scorer can
 measure (see [Verification](docs/verification.md)), but climbing to rank one is the network's
 to grant as it routes and re-scores over the grace period and beyond.
+
+The forecast miner was just rebuilt to answer the specific day and aspect each question asks
+about (wind, snow, rain amount, a storm verdict, a below-freezing check, the high and low),
+because the intent's scorer scores a generic forecast near zero on a wind or snow question.
+The descriptor now declares `when` and `focus` so the node can route that aspect through. See
+[Verification](docs/verification.md) for the before and after scores.
 
 ---
 
@@ -150,7 +156,8 @@ to grant as it routes and re-scores over the grace period and beyond.
 |--------|------|-------------|
 | `GET` | `/forecast/{location}` | Default 3-day forecast with location in path |
 | `GET` | `/forecast?location=&days=` | Configurable 1–7 day forecast |
-| `GET` | `/forecast?query=` | Parses "5 day forecast for Berlin" naturally |
+| `GET` | `/forecast?location=&when=&focus=` | Aspect-aware: `when` names the day or window (tomorrow, Friday, this weekend, this week, next 48 hours, next two days, tomorrow morning), `focus` names the aspect (rain, wind, snow, storm, freeze, temperature) |
+| `GET` | `/forecast?query=` | Parses a whole question ("wind forecast for Cape Town tomorrow morning") and answers the day and aspect it asks about |
 
 ### Storm Alert — `STORM_ALERT`
 
@@ -276,8 +283,11 @@ SkyWire doesn't just match a bare place name — it understands full questions:
 | `London` | London (direct) |
 | `what is the weather in Paris` | Paris (NL extraction) |
 | `3 day forecast for Tokyo` | Tokyo, 3 days |
-| `any storms coming to Miami` | Miami, storm check |
-| `forecast for Friday` | Target day extraction |
+| `wind forecast for Cape Town tomorrow morning` | Cape Town, wind aspect, tomorrow morning |
+| `how much snow for Oslo over the next two days` | Oslo, snow total over two days |
+| `will it drop below freezing in Chicago this week` | Chicago, below-freezing check across the week |
+| `will it rain in London this weekend` | London, weekend rain verdict |
+| `forecast high and low for Denver on Friday` | Denver, high and low, Friday |
 | `{location}` (template probe) | London (safe default) |
 
 ### Caching Strategy

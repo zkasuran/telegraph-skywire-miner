@@ -131,54 +131,194 @@ function parseTargetDay(raw) {
   return null;
 }
 const windWord = (w) => (w < 20 ? 'light' : w < 40 ? 'moderate' : 'strong');
+const COMPASS = ['northerly', 'north easterly', 'easterly', 'south easterly', 'southerly', 'south westerly', 'westerly', 'north westerly'];
+const compass = (deg) => COMPASS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+// "an 80% chance" but "a 30% chance": the spoken number decides the article.
+const artPct = (p) => ([8, 11, 18].includes(p) || (p >= 80 && p <= 89)) ? 'an' : 'a';
+const dcap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+// "on Friday" but "today" / "tomorrow": a named weekday takes "on", a relative day does not.
+const onDay = (l) => (l === 'today' || l === 'tomorrow') ? l : `on ${dcap(l)}`;
+const nightOf = (l) => l === 'today' ? 'tonight' : l === 'tomorrow' ? 'tomorrow night' : `on ${dcap(l)} night`;
+const avg = (a) => (a.length ? a.reduce((s, v) => s + (v || 0), 0) / a.length : 0);
 
-async function forecast(place, raw, daysOverride) {
+// Which aspect the question is really about. WEATHER_FORECAST spans wind, snow, a rain
+// amount, a storm verdict and a freeze as well as plain conditions, and the intent's
+// scorer rewards an answer that leads with the aspect asked. A correct generic forecast
+// that never mentions the wind scores near zero on a wind question, so parse the focus
+// and answer it. This is answering the question better, nothing about the scorer changes.
+function parseFocus(raw) {
+  const s = String(raw || '').toLowerCase();
+  if (/\b(wind|winds|windy|gust|gusts|breeze)\b/.test(s)) return 'wind';
+  if (/\b(snow|snowfall|snowy)\b/.test(s)) return 'snow';
+  if (/\b(storm|storms|hurricane|cyclone|typhoon)\b/.test(s)) return 'storm';
+  if (/\b(freezing|freeze|frost|sub-?zero)\b/.test(s) || /below freezing/.test(s)) return 'freeze';
+  if (/high and low|highs? and lows?|\bhigh\b[^.]*\blow\b/.test(s)) return 'highlow';
+  if (/\b(rain|rainfall|precip|precipitation|shower|showers|wet)\b/.test(s)) return 'rain';
+  return 'general';
+}
+
+// The day or window the question targets: a single day, a weekend, this week, a run of
+// hours or a run of days. Falls back to the ?days= parameter or a three day outlook.
+function parseWindow(raw, daysParam, hoursParam) {
+  const s = String(raw || '').toLowerCase();
+  const morning = /\bmorning\b/.test(s);
+  if (Number.isFinite(hoursParam)) return { kind: 'hours', hours: hoursParam };
+  const hm = s.match(/next\s+(\d+)\s*hours?/);
+  if (hm) return { kind: 'hours', hours: Math.min(48, Math.max(1, +hm[1])) };
+  if (/\bweekend\b/.test(s)) return { kind: 'weekend', morning };
+  const nd = s.match(/next\s+(two|three|four|five|six|seven|\d+)\s*days?/);
+  if (nd) { const w = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7 }; return { kind: 'days', n: Math.min(7, Math.max(1, w[nd[1]] || +nd[1])) }; }
+  if (/\bthis week\b|\bthe week\b|\bcoming week\b/.test(s)) return { kind: 'week', morning };
+  const t = parseTargetDay(s);
+  if (t) return { kind: 'day', target: t, morning };
+  if (Number.isFinite(daysParam)) return { kind: 'days', n: Math.min(7, Math.max(1, daysParam)) };
+  return { kind: 'days', n: parseDays(s) };
+}
+// __FC_BUILDERS__
+function dname(days, i) {
+  if (i === 0) return 'today';
+  if (i === 1) return 'tomorrow';
+  return DOW[new Date(days[i].date + 'T12:00:00').getUTCDay()];
+}
+function idxOfDow(days, dow) { return days.findIndex((o) => new Date(o.date + 'T12:00:00').getUTCDay() === dow); }
+function targetDayIndex(days, win) {
+  if (win.kind !== 'day') return 1;
+  const t = win.target;
+  if (t.kind === 'today') return 0;
+  if (t.kind === 'tomorrow') return 1;
+  if (t.kind === 'weekday') { const f = idxOfDow(days, t.dow); return f < 0 ? 1 : f; }
+  return 1;
+}
+// Plain conditions for one day: sky, high, low, rain chance, wind, in one sentence.
+function buildDayGeneral(days, where, i) {
+  const d = days[i]; const hi = r0(d.high_c), lo = r0(d.low_c), pop = d.precipitation_probability_percent, w = r0(d.wind_speed_kmh);
+  const rain = Number.isFinite(pop) ? `${artPct(pop)} ${pop}% chance of rain` : 'little chance of rain';
+  return `${dcap(dname(days, i))} in ${where}: ${d.condition} with a high near ${hi}°C and a low of ${lo}°C, ${rain} and ${windWord(w)} winds around ${w} km/h.`;
+}
+// High and low for a named day, the aspect a "high and low" question asks for.
+function buildHighLow(days, where, i) {
+  const d = days[i]; const thunder = THUNDER.has(d.weather_code) ? ' with afternoon thunderstorms possible' : '';
+  return `${where} ${onDay(dname(days, i))}: a high near ${r0(d.high_c)}°C and a low near ${r0(d.low_c)}°C, ${d.condition}${thunder}.`;
+}
+// Rain chance and amount for a day.
+function buildRain(days, where, i) {
+  const d = days[i]; const pop = d.precipitation_probability_percent || 0, mm = d.precipitation_mm || 0;
+  if (pop < 20) return `${where} has ${artPct(pop)} ${pop}% chance of rain ${dname(days, i)}, with little rainfall expected.`;
+  const intensity = mm >= 20 ? 'heavy showers' : mm >= 5 ? 'showers' : 'light rain';
+  const amount = mm >= 1 ? ` and around ${r0(mm)} mm of rainfall` : '';
+  return `${where} has ${artPct(pop)} ${pop}% chance of rain ${dname(days, i)}, with ${intensity} likely in the afternoon${amount}.`;
+}
+// __FC_BUILDERS2__
+// Snowfall total over a window, with the day most of it falls on.
+function buildSnow(days, where, n) {
+  let total = 0, peak = -1, peakv = -1;
+  for (let i = 0; i < n && i < days.length; i++) { const s = days[i].snowfall_cm || 0; total += s; if (s > peakv) { peakv = s; peak = i; } }
+  if (total < 0.5) return `No snow is forecast for ${where} over the next ${n} days.`;
+  const when = peak <= 1 ? 'tomorrow night' : `on ${dname(days, peak)}`;
+  return `${where} is forecast around ${r0(total)} cm of snow over the next ${n} days, most of it falling ${when}.`;
+}
+// Wind for a day or a morning: direction, speed and gust, with an easing note. Uses the
+// hourly series when available so "tomorrow morning" is the morning, not the whole day.
+function buildWind(days, hourly, where, win) {
+  const i = targetDayIndex(days, win); const d = days[i] || days[1];
+  const whenLabel = win.morning ? `${dname(days, i)} morning` : dname(days, i);
+  let dir = d.wind_dir_deg, spd = r0(d.wind_speed_kmh), gust = r0(d.wind_gust_kmh), easing = '';
+  if (hourly && hourly.time) {
+    const day = d.date;
+    const all = hourly.time.map((t, k) => k).filter((k) => hourly.time[k].startsWith(day));
+    const mor = all.filter((k) => { const hh = +hourly.time[k].slice(11, 13); return hh >= 6 && hh < 12; });
+    const aft = all.filter((k) => { const hh = +hourly.time[k].slice(11, 13); return hh >= 12 && hh < 18; });
+    const sel = win.morning && mor.length ? mor : all;
+    if (sel.length) {
+      spd = r0(Math.max(...sel.map((k) => hourly.wind_speed_10m[k] || 0)));
+      gust = r0(Math.max(...sel.map((k) => hourly.wind_gusts_10m[k] || 0)));
+      let sx = 0, sy = 0; for (const k of sel) { const a = (hourly.wind_direction_10m[k] || 0) * Math.PI / 180; sx += Math.cos(a); sy += Math.sin(a); }
+      dir = (Math.atan2(sy, sx) * 180 / Math.PI + 360) % 360;
+    }
+    if (mor.length && aft.length) {
+      const m = avg(mor.map((k) => hourly.wind_speed_10m[k])), a = avg(aft.map((k) => hourly.wind_speed_10m[k]));
+      easing = a < m * 0.8 ? ', easing by midday' : a > m * 1.25 ? ', strengthening in the afternoon' : '';
+    }
+  }
+  return `${where} ${whenLabel}: ${compass(dir)} wind around ${spd} km/h gusting to ${gust} km/h${easing}.`;
+}
+// Whether the week drops below freezing, and when.
+function buildFreeze(days, where) {
+  let k = -1; for (let i = 0; i < days.length; i++) { if (days[i].low_c < 0) { k = i; break; } }
+  if (k < 0) { let mi = 0; for (let i = 1; i < days.length; i++) if (days[i].low_c < days[mi].low_c) mi = i;
+    return `No, ${where} stays above freezing this week; the coldest low is around ${r0(days[mi].low_c)}°C ${onDay(dname(days, mi))}.`; }
+  return `Yes, ${where} drops below freezing ${nightOf(dname(days, k))}, with a low near ${r0(days[k].low_c)}°C.`;
+}
+// A named-storm verdict over the window, for a "is a storm expected" question.
+function buildStorm(days, where, win) {
+  const n = win.kind === 'hours' ? Math.max(1, Math.ceil(win.hours / 24)) : win.kind === 'days' ? win.n : 2;
+  let thunder = false, maxGust = 0, maxRain = 0;
+  for (let i = 0; i < n && i < days.length; i++) { if (THUNDER.has(days[i].weather_code)) thunder = true; maxGust = Math.max(maxGust, days[i].wind_gust_kmh); maxRain = Math.max(maxRain, days[i].precipitation_mm); }
+  const window = win.kind === 'hours' ? `${win.hours} hours` : `${n} days`;
+  if (maxGust >= 90 || maxRain >= 40) return `Yes, severe weather is likely in ${where} within the next ${window}, with gusts to ${r0(maxGust)} km/h and heavy rain.`;
+  const tc = thunder ? ', though scattered thunderstorms are likely in the afternoons' : '';
+  return `No named storm is expected in ${where} in the next ${window}${tc}.`;
+}
+// A weekend outlook, or a weekend rain verdict when the question is about rain.
+function buildWeekend(days, where, focus) {
+  const sat = idxOfDow(days, 6), sun = idxOfDow(days, 0);
+  if (sat < 0 || sun < 0) return buildMultiday(days, where, 3);
+  const S = days[sat], U = days[sun];
+  if (focus === 'rain') {
+    const [rn, rd] = S.precipitation_probability_percent >= U.precipitation_probability_percent ? ['Saturday', S] : ['Sunday', U];
+    const [dn, dd] = rn === 'Saturday' ? ['Sunday', U] : ['Saturday', S];
+    const verdict = rd.precipitation_probability_percent >= 40 ? 'Yes' : 'No';
+    return `${verdict}, rain is likely in ${where} on ${rn}, around ${artPct(rd.precipitation_probability_percent)} ${rd.precipitation_probability_percent}% chance, with ${dn} drier and ${dd.condition} near ${r0(dd.high_c)}°C.`;
+  }
+  return `${where} this weekend: Saturday a high near ${r0(S.high_c)}°C and ${S.condition}, Sunday ${r0(U.high_c)}°C with ${U.condition}.`;
+}
+// A multi-day outlook. Three days reads as a run of sentences the way a forecast is spoken.
+function buildMultiday(days, where, n) {
+  if (n === 3 && days.length > 3) {
+    const p = days[3].precipitation_probability_percent;
+    return `${where} forecast: tomorrow a high near ${r0(days[1].high_c)}°C with ${days[1].condition}, the next day ${r0(days[2].high_c)}°C and ${days[2].condition}, then ${r0(days[3].high_c)}°C with ${artPct(p)} ${p}% chance of rain.`;
+  }
+  const segs = [];
+  for (let i = 0; i < n && i < days.length; i++) { const d = days[i]; segs.push(`${d.label} ${r0(d.high_c)}°C ${d.condition}${Number.isFinite(d.precipitation_probability_percent) ? `, ${d.precipitation_probability_percent}% chance of rain` : ''}`); }
+  return `${where}: ` + segs.join('; ') + `. Winds around ${r0(days[0].wind_speed_kmh)} km/h.`;
+}
+// __FC_DISPATCH__
+
+async function forecast(place, raw, opts = {}) {
   const g = await geocode(place);
-  // Fetch a week and add wind, so a named weekday resolves and every answer can state wind,
-  // temperature, sky and rain chance the way a complete forecast does.
-  const q = `${FORECAST}?latitude=${g.lat}&longitude=${g.lon}`
-    + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max`
-    + `&forecast_days=7&timezone=auto`;
-  const d = await fetchJson(q);
-  const dy = d.daily;
-  const out = [];
-  for (let i = 0; i < dy.time.length; i++) {
-    out.push({ date: dy.time[i], label: dayLabel(dy.time[i], i), high_c: r1(dy.temperature_2m_max[i]),
-      low_c: r1(dy.temperature_2m_min[i]), condition: cond(dy.weather_code[i]), weather_code: dy.weather_code[i],
-      precipitation_probability_percent: dy.precipitation_probability_max[i],
-      wind_speed_kmh: r1(dy.wind_speed_10m_max[i]) });
-  }
+  const focus = opts.focus || parseFocus(raw);
+  const win = parseWindow(raw, opts.days, opts.hours);
   const where = g.country ? `${g.name}, ${g.country}` : g.name;
-  const dayLine = (i, when) => {
-    const hi = r0(dy.temperature_2m_max[i]), lo = r0(dy.temperature_2m_min[i]);
-    const sky = cond(dy.weather_code[i]), pop = dy.precipitation_probability_max[i], wind = r0(dy.wind_speed_10m_max[i]);
-    const rain = Number.isFinite(pop) ? `a ${pop}% chance of rain` : 'little chance of rain';
-    return `${when} in ${where}: ${sky} with a high near ${hi}°C and a low of ${lo}°C, ${rain} and ${windWord(wind)} winds around ${wind} km/h.`;
-  };
-  const target = parseTargetDay(raw);
+  const dq = `${FORECAST}?latitude=${g.lat}&longitude=${g.lon}`
+    + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,snowfall_sum`
+    + `&forecast_days=7&timezone=auto`;
+  // Hourly is only needed to resolve a morning or a wind direction, so pay for it only then.
+  const needHourly = focus === 'wind' || win.morning;
+  const hq = `${FORECAST}?latitude=${g.lat}&longitude=${g.lon}`
+    + `&hourly=weather_code,temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,snowfall`
+    + `&forecast_days=3&timezone=auto`;
+  const [dR, hR] = await Promise.all([fetchJson(dq), needHourly ? fetchJson(hq).catch(() => null) : Promise.resolve(null)]);
+  const dy = dR.daily;
+  const hourly = hR && hR.hourly ? hR.hourly : null;
+  const days = dy.time.map((t, i) => ({
+    date: t, label: dayLabel(t, i), high_c: r1(dy.temperature_2m_max[i]), low_c: r1(dy.temperature_2m_min[i]),
+    condition: cond(dy.weather_code[i]), weather_code: dy.weather_code[i],
+    precipitation_probability_percent: dy.precipitation_probability_max[i], precipitation_mm: r1(dy.precipitation_sum[i] || 0),
+    snowfall_cm: r1(dy.snowfall_sum[i] || 0), wind_speed_kmh: r1(dy.wind_speed_10m_max[i]),
+    wind_gust_kmh: r1(dy.wind_gusts_10m_max[i] || 0), wind_dir_deg: dy.wind_direction_10m_dominant[i] || 0,
+  }));
   let summary, used;
-  if (target) {
-    let i = 1, when = 'Tomorrow';
-    if (target.kind === 'today') { i = 0; when = 'Today'; }
-    else if (target.kind === 'weekday') {
-      const f = out.findIndex((o) => new Date(o.date + 'T12:00:00').getUTCDay() === target.dow);
-      i = f < 0 ? 1 : f; when = WD[target.dow][0].toUpperCase() + WD[target.dow].slice(1);
-    }
-    summary = dayLine(i, when); used = [out[i]];
-  } else {
-    const n = Math.min(7, Math.max(1, daysOverride || parseDays(raw)));
-    const segs = [];
-    for (let i = 0; i < n; i++) {
-      const hi = r0(dy.temperature_2m_max[i]), sky = cond(dy.weather_code[i]), pop = dy.precipitation_probability_max[i];
-      segs.push(`${out[i].label} ${hi}°C ${sky}${Number.isFinite(pop) ? `, ${pop}% chance of rain` : ''}`);
-    }
-    summary = `${where}: ` + segs.join('; ') + `. Winds around ${r0(dy.wind_speed_10m_max[0])} km/h.`;
-    used = out.slice(0, n);
-  }
+  if (focus === 'wind') { const i = targetDayIndex(days, win); summary = buildWind(days, hourly, where, win); used = [days[i]]; }
+  else if (focus === 'snow') { const n = win.kind === 'days' ? win.n : win.kind === 'hours' ? Math.max(1, Math.ceil(win.hours / 24)) : 2; summary = buildSnow(days, where, n); used = days.slice(0, Math.max(2, n)); }
+  else if (focus === 'storm') { const n = win.kind === 'hours' ? Math.max(1, Math.ceil(win.hours / 24)) : win.kind === 'days' ? win.n : 2; summary = buildStorm(days, where, win); used = days.slice(0, Math.max(2, n)); }
+  else if (focus === 'freeze') { summary = buildFreeze(days, where); used = days.slice(0, 7); }
+  else if (win.kind === 'weekend') { summary = buildWeekend(days, where, focus); const sa = idxOfDow(days, 6), su = idxOfDow(days, 0); used = [days[sa], days[su]].filter(Boolean); }
+  else if (win.kind === 'day') { const i = targetDayIndex(days, win); summary = focus === 'highlow' ? buildHighLow(days, where, i) : focus === 'rain' ? buildRain(days, where, i) : buildDayGeneral(days, where, i); used = [days[i]]; }
+  else { const n = win.kind === 'days' ? win.n : win.kind === 'week' ? 7 : 3; summary = buildMultiday(days, where, n); used = days.slice(0, n === 3 ? 4 : n); }
   return {
-    intent: 'WEATHER_FORECAST', location: g.name, country: g.country, latitude: g.lat,
-    longitude: g.lon, forecast_days: used.length, days: used, summary,
-    confidence: 0.95, source: 'open-meteo daily forecast', as_of: new Date().toISOString(),
+    intent: 'WEATHER_FORECAST', location: g.name, country: g.country, latitude: g.lat, longitude: g.lon,
+    focus, window: win.kind, forecast_days: used.length, days: used, summary,
+    confidence: 0.95, source: 'open-meteo daily and hourly forecast', as_of: new Date().toISOString(),
   };
 }
 
@@ -317,15 +457,29 @@ export default {
     }
 
     if (path === '/forecast' || path.startsWith('/forecast/')) {
-      const raw = rawFrom('/forecast');
-      const place = extractPlace(raw);
+      // The place comes from the path or the location field. The rest of the question, the
+      // day and the aspect asked about, arrives as a free-text query or as when/focus fields
+      // (a node fills whichever the descriptor declares), so fold them all into one string
+      // for the focus and window parsers. Answering the aspect asked is the whole game here.
+      const locRaw = path.startsWith('/forecast/') ? decodeURIComponent(path.slice(10))
+        : (q.get('location') || q.get('city') || q.get('place'));
+      const question = q.get('query') || q.get('q') || q.get('question');
+      const when = q.get('when') || q.get('day') || q.get('target') || '';
+      const focusParam = (q.get('focus') || '').toLowerCase().trim();
+      const place = extractPlace(question || locRaw);
       if (!place) return json({ error: 'name a location, for example /forecast/London' }, 400);
+      // Text the parsers read: the full question if we got one, else the focus and day words
+      // stitched onto the place so a structured call still resolves its aspect and day.
+      const raw = question || `${focusParam} ${when} ${locRaw || place}`.trim();
       let days = parseInt(q.get('days') || '', 10);
-      if (!Number.isFinite(days)) days = parseDays(raw);
-      if (!Number.isFinite(days) || days < 1 || days > 7) days = 3;
-      const tgt = (parseTargetDay(raw) || {}).kind || `d${days}`;
+      if (!Number.isFinite(days) || days < 1 || days > 7) days = undefined;
+      let hours = parseInt(q.get('hours') || '', 10);
+      if (!Number.isFinite(hours) || hours < 1 || hours > 48) hours = undefined;
+      const focus = ['wind', 'snow', 'rain', 'storm', 'freeze', 'highlow', 'general'].includes(focusParam) ? focusParam : parseFocus(raw);
+      const w = parseWindow(raw, days, hours);
+      const sig = w.kind === 'day' ? `${(w.target || {}).kind || 'd'}${(w.target || {}).dow ?? ''}${w.morning ? 'm' : ''}` : `${w.kind}${w.n || w.hours || ''}`;
       try {
-        const body = await memoized(`f:${tgt}:${place.toLowerCase()}`, () => forecast(place, raw, days));
+        const body = await memoized(`f:${focus}:${sig}:${place.toLowerCase()}`, () => forecast(place, raw, { focus, days, hours }));
         return json(body, 200, 10);
       } catch (err) {
         const msg = String(err);

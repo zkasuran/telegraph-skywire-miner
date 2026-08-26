@@ -5,10 +5,12 @@ slug: skywire-forecast
 protocol: generic
 name: SkyWire Weather Forecast
 description: >
-  Multi-day forecast for a named place, read live from the open-meteo daily API at
-  request time and returned as one sentence per day: high, low, sky and rain chance.
-  Answers the WEATHER_FORECAST intent for anywhere open-meteo can geocode. Defaults to
-  three days. No API key, nothing cached that can go stale.
+  Weather forecast for a named place, read live from open-meteo at request time. Answers the
+  specific question asked: a day or window (tomorrow, Friday, this weekend, this week, the
+  next 48 hours, the next two days, tomorrow morning) and the aspect emphasised (rain chance
+  and amount, wind speed and gusts, snowfall, a storm verdict, a below-freezing check or the
+  high and low), leading with that aspect the way a person would answer. Defaults to a three
+  day outlook. No API key, nothing cached that can go stale.
 base_url: https://telegraph-sky.margyn.workers.dev
 
 docs:
@@ -36,6 +38,18 @@ input_schema:
     days:
       type: integer
       description: Number of days to forecast, 1 to 7, default 3.
+    when:
+      type: string
+      description: >
+        The day or window the question is about, if it names one, for example tomorrow,
+        Friday, this weekend, this week, the next 48 hours, the next two days or tomorrow
+        morning. Leave empty for a general multi-day outlook.
+    focus:
+      type: string
+      description: >
+        Which aspect the question emphasises, if any: general, temperature, rain, wind,
+        snow, storm. A wind question wants the wind, a snow question wants the snowfall.
+        Leave empty for general conditions.
   required:
     - location
 
@@ -66,8 +80,12 @@ endpoints:
     external_path: /forecast
     method: GET
     description: >
-      Forecast for one place, location as a query parameter (?location=London&days=3).
-      Also accepts a whole question in ?query=.
+      Forecast for one place. Pass the place as ?location=London. Add ?when= for a specific
+      day or window (tomorrow, Friday, this weekend, this week, next 48 hours, next two days,
+      tomorrow morning) and ?focus= for the aspect asked about (rain, wind, snow, storm,
+      freeze, temperature); the answer then leads with that aspect. ?days=1..7 sets a plain
+      multi-day outlook. A whole natural-language question can be passed in ?query= instead
+      and the day and aspect are parsed from it.
   - path: /forecast/{location}
     external_path: /forecast/{location}
     method: GET

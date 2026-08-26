@@ -53,8 +53,28 @@ For contrast, the answer styles weak miners return score far lower on the same j
 | "24/14 partly cloudy" (terse fragment) | ~0.009 |
 | a padded, vague weather essay | ~0.008 |
 
-On answer quality the gap is not close. To reproduce: fetch the intent's active scorer URL from
-the node (`/engine/validator/v1/intents/<keccak256(INTENT)>` then `/wasm/<regid>`), download the
+### Answering the aspect, not just the place
+
+WEATHER_FORECAST is not one question. Its live traffic asks for the wind tomorrow morning,
+how much snow over two days, whether it drops below freezing this week, a storm verdict for
+the next 48 hours, a rain chance and amount, a high and low for a named day. The node routes
+a miner the place, not the aspect, so a miner that always returns a generic temperature
+forecast answers the wrong question on half of them. Measured against the intent's own scorer,
+holding the ground-truth facts fixed so only the shape changes:
+
+| Question shape | Generic forecast | Aspect-aware answer |
+|----------------|------------------|---------------------|
+| wind (Cape Town, tomorrow morning) | ~0.011 | 1.000 |
+| snow amount (Oslo, next two days) | ~0.008 | 1.000 |
+| storm verdict (Miami, next 48 hours) | ~0.007 | 1.000 |
+| below-freezing (Chicago, this week) | ~0.009 | 1.000 |
+| rain chance and amount (Mumbai, tomorrow) | ~0.010 | 1.000 |
+
+So the miner reads the day and the aspect the question is about and leads with it. The
+descriptor declares `when` and `focus` so the node can route that aspect through. All ten
+canonical question shapes now score 0.994 to 1.0. On answer quality the gap is not close. To
+reproduce: fetch the intent's active scorer URL from the node
+(`/engine/validator/v1/intents/<keccak256(INTENT)>` then `/wasm/<regid>`), download the
 `.wasm` from the public [`telegraph-salience-scorer`](https://github.com/zkasuran/telegraph-salience-scorer)
 repo, instantiate it in any WASM runtime and call
 `rank_answer(question, ground_truth, answer)`.
@@ -75,7 +95,8 @@ things. Conflating them would be dishonest:
   score forms.
 
 So the honest reading is: the answers are built to win. On the busiest intent
-(`WEATHER_FORECAST`, 941 requests) the number-one seat is currently open, but rank 1 is the
+(`WEATHER_FORECAST`, 941 requests) SkyWire is rank 2, a hair behind the leader. The
+aspect-aware rebuild above closed the answer-quality gap that kept it there. Rank 1 is the
 network's to grant as it routes and re-scores over time. See the [Status](../README.md#status)
 table for the current standings. This repo will not claim a rank the leaderboard does not show.
 

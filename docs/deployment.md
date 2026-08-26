@@ -116,7 +116,7 @@ curl -s "$WORKER/weather/{location}" | jq .location
 
 ### Built-in: `/__last` Endpoint
 
-The worker maintains a per-isolate ring buffer of the last 25 requests:
+The worker maintains a per-isolate buffer of the last 50 requests, and the `/__last` endpoint returns the 25 most recent:
 
 ```bash
 curl -s "$WORKER/__last" | jq '.recent[-5:]'
@@ -274,7 +274,7 @@ After deployment, register the miner on-chain:
 | Field | Value |
 |-------|-------|
 | Chain | Base Sepolia |
-| Registry Contract | `0x5a2324aA18613FAd4e44bDF0d6c73Ec1f6D87ff8` |
+| Registry Contract | `0x5a2324aA18613FAD4e44bDF0d6c73Ec1f6D87ff8` |
 | Miner Wallet | `0x8b224783FE5b3c52B7DB0cb9B1754f8812b75287` |
 
 ### Descriptor Files

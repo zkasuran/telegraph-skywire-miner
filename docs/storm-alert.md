@@ -79,7 +79,7 @@ The miner evaluates **six hazard types**, each graded independently against cali
 | 🔥 **Extreme Heat** | Feels-like ≥ 38°C | Feels-like ≥ 42°C | `apparent_temperature` max |
 | 🥶 **Extreme Cold** | Feels-like ≤ −12°C | Feels-like ≤ −20°C | `apparent_temperature` min |
 
-**Rain grading logic:** The higher of the two rain grades (window total vs. hourly peak) is used. This catches both prolonged moderate rain and intense bursts.
+**Rain grading logic:** The window total grade takes priority — if it triggers at any level, that grade is used. The hourly peak grade is only consulted as a fallback when the window total is below advisory threshold. This catches prolonged moderate rain first, with intense burst detection as a safety net.
 
 **Thunderstorms** are always graded as `warning` when present — there is no "mild thunderstorm" advisory.
 

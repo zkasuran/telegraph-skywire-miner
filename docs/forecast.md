@@ -203,8 +203,8 @@ When a specific day is named ("tomorrow", "Friday"), the response contains **onl
 
 **Wind descriptions:**
 - < 20 km/h → "light"
-- 20–40 km/h → "moderate"
-- > 40 km/h → "strong"
+- 20–39 km/h → "moderate"
+- ≥ 40 km/h → "strong"
 
 ---
 

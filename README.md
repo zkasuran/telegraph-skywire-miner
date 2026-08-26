@@ -225,7 +225,7 @@ Registered on **Base Sepolia** against the Telegraph registry:
 
 | Field | Value |
 |-------|-------|
-| Registry | `0x5a2324aA18613FAd4e44bDF0d6c73Ec1f6D87ff8` |
+| Registry | `0x5a2324aA18613FAD4e44bDF0d6c73Ec1f6D87ff8` |
 | Wallet | `0x8b224783FE5b3c52B7DB0cb9B1754f8812b75287` |
 
 ### Registered Descriptors

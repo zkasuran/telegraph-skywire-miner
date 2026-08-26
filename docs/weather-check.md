@@ -120,8 +120,8 @@ It is currently {temp}°C and {condition} in {place}, {country}, with {humidity}
 
 - **Wind description** adapts to speed:
   - < 12 km/h → "light winds"
-  - 12–30 km/h → "{speed} km/h winds"
-  - > 30 km/h → "strong {speed} km/h winds"
+  - 12–29 km/h → "{speed} km/h winds"
+  - ≥ 30 km/h → "strong {speed} km/h winds"
 - **Feels-like clause** is appended only when it differs from actual temperature by ≥ 2°C:
   - `" It feels like {feels}°C."`
 

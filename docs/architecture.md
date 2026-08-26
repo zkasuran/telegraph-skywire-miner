@@ -287,7 +287,7 @@ Telegraph nodes don't always extract a bare place name before forwarding. A quer
 │                   │   Worker     │                              │
 │                   └──────────────┘                              │
 │                                                                 │
-│  Registry: 0x5a2324aA18613FAd4e44bDF0d6c73Ec1f6D87ff8          │
+│  Registry: 0x5a2324aA18613FAD4e44bDF0d6c73Ec1f6D87ff8          │
 │  Chain: Base Sepolia                                            │
 └─────────────────────────────────────────────────────────────────┘
 ```

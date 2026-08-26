@@ -230,19 +230,16 @@ async function stormAlert(place, hours = 24) {
   const breach = level !== 'none';
   const window = `${hours} hours`;
   const where = g.country ? `${g.name}, ${g.country}` : g.name;
-  // Headline names the driving hazard family, so a heat wave is not called a "storm" and
-  // snow reads as a winter storm.
-  const HEAD = { 'thunderstorms': 'Storm', 'high wind': 'Storm', 'heavy rain': 'Storm',
-    'heavy snow': 'Winter storm', 'extreme heat': 'Extreme heat', 'extreme cold': 'Extreme cold' };
   let summary;
   if (!breach) {
-    const calm = n ? ` Winds peak near ${r0(maxGust)} km/h and no thunderstorms are forecast.` : '';
-    summary = `No severe weather expected for ${where} in the next ${window}.${calm}`;
+    const calm = n ? ` Winds stay around ${r0(maxGust)} km/h and no thunderstorms are in the forecast.` : '';
+    summary = `No storm is expected in ${where} in the next ${window}.${calm}`;
   } else {
     const top = hz.slice().sort((a, b) => rank[b.level] - rank[a.level])[0];
-    const head = `${HEAD[top.type] || 'Severe weather'} ${level}`;
+    const kind = { 'extreme heat': 'extreme heat', 'extreme cold': 'extreme cold',
+      'heavy snow': 'winter storm conditions' }[top.type] || 'severe weather';
     const lead = hz.map((x) => (x.when ? `${x.detail} ${x.when}` : x.detail)).join(', ');
-    summary = `${head} for ${where}: ${lead}. Severe weather is likely within the next ${window}.`;
+    summary = `Yes, ${kind} is likely in ${where} within the next ${window}: ${lead}.`;
   }
   return {
     intent: 'STORM_ALERT', location: g.name, country: g.country, latitude: g.lat, longitude: g.lon,

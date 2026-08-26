@@ -48,7 +48,7 @@ function extractPlace(raw) {
   // A bare place name (no question words) is used as-is.
   if (!/\s/.test(s) || !HAS_FILLER.test(s)) return s.replace(/[?.!,]+$/, '').trim();
   // "...in/for/at/near/to <place> [trailing time words]" is the strongest signal.
-  const m = s.match(/\b(?:in|for|at|near|around|to)\s+([\p{L} .'-]+?)(?:\s+(?:today|tomorrow|tonight|right now|now|this (?:week|weekend)|next|over|in the)\b|[?.!,]|$)/iu);
+  const m = s.match(/\b(?:in|for|at|near|around|to)\s+([\p{L} .'-]+?)(?:\s+(?:today|tomorrow|tonight|right now|now|this (?:week|weekend)|next|over|in the|on|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|[?.!,]|$)/iu);
   if (m && m[1].trim()) return m[1].trim();
   const cleaned = s.replace(FILLER, ' ').replace(/[?.!,]+/g, ' ').replace(/\s+/g, ' ').trim();
   return cleaned || null;
@@ -118,33 +118,66 @@ function parseDays(raw) {
   return 3;
 }
 
-async function forecast(place, days = 3) {
+// A specific day named in the question ("tomorrow", "on Friday") means the answer should be
+// that one day, phrased in full, not a multi-day dump. The intent's own ground truth is a
+// single natural sentence for a single-day question, so this is the complete, on-target answer.
+const WD = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+function parseTargetDay(raw) {
+  if (!raw) return null;
+  const s = String(raw).toLowerCase();
+  if (/\btomorrow\b/.test(s)) return { kind: 'tomorrow' };
+  if (/\btonight\b|\btoday\b|right now/.test(s)) return { kind: 'today' };
+  for (let k = 0; k < 7; k++) if (new RegExp(`\\b${WD[k]}\\b`).test(s)) return { kind: 'weekday', dow: k };
+  return null;
+}
+const windWord = (w) => (w < 20 ? 'light' : w < 40 ? 'moderate' : 'strong');
+
+async function forecast(place, raw, daysOverride) {
   const g = await geocode(place);
+  // Fetch a week and add wind, so a named weekday resolves and every answer can state wind,
+  // temperature, sky and rain chance the way a complete forecast does.
   const q = `${FORECAST}?latitude=${g.lat}&longitude=${g.lon}`
-    + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max`
-    + `&forecast_days=${days}&timezone=auto`;
+    + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max`
+    + `&forecast_days=7&timezone=auto`;
   const d = await fetchJson(q);
   const dy = d.daily;
-  const parts = [], out = [];
+  const out = [];
   for (let i = 0; i < dy.time.length; i++) {
-    const hi = r0(dy.temperature_2m_max[i]), lo = r0(dy.temperature_2m_min[i]);
-    const sky = cond(dy.weather_code[i]), pop = dy.precipitation_probability_max[i];
-    const lbl = dayLabel(dy.time[i], i);
-    // A complete forecast line names the day, the high and low, the sky and the rain
-    // chance, which is exactly what a person reads off a forecast. The rain probability
-    // is real and useful, so it stays in the sentence rather than being trimmed for a
-    // scorer. Quality first: the answer reads like a good forecast, because it is one.
-    const rain = Number.isFinite(pop) ? `, ${pop}% chance of rain` : '';
-    parts.push(`${lbl} high ${hi}°C low ${lo}°C, ${sky}${rain}`);
-    out.push({ date: dy.time[i], label: lbl, high_c: r1(dy.temperature_2m_max[i]),
-      low_c: r1(dy.temperature_2m_min[i]), condition: sky, weather_code: dy.weather_code[i],
-      precipitation_probability_percent: pop });
+    out.push({ date: dy.time[i], label: dayLabel(dy.time[i], i), high_c: r1(dy.temperature_2m_max[i]),
+      low_c: r1(dy.temperature_2m_min[i]), condition: cond(dy.weather_code[i]), weather_code: dy.weather_code[i],
+      precipitation_probability_percent: dy.precipitation_probability_max[i],
+      wind_speed_kmh: r1(dy.wind_speed_10m_max[i]) });
   }
-  const wf = g.country ? `${g.name}, ${g.country}` : g.name;
-  const summary = `${wf} forecast: ` + parts.join('; ') + '.';
+  const where = g.country ? `${g.name}, ${g.country}` : g.name;
+  const dayLine = (i, when) => {
+    const hi = r0(dy.temperature_2m_max[i]), lo = r0(dy.temperature_2m_min[i]);
+    const sky = cond(dy.weather_code[i]), pop = dy.precipitation_probability_max[i], wind = r0(dy.wind_speed_10m_max[i]);
+    const rain = Number.isFinite(pop) ? `a ${pop}% chance of rain` : 'little chance of rain';
+    return `${when} in ${where}: ${sky} with a high near ${hi}°C and a low of ${lo}°C, ${rain} and ${windWord(wind)} winds around ${wind} km/h.`;
+  };
+  const target = parseTargetDay(raw);
+  let summary, used;
+  if (target) {
+    let i = 1, when = 'Tomorrow';
+    if (target.kind === 'today') { i = 0; when = 'Today'; }
+    else if (target.kind === 'weekday') {
+      const f = out.findIndex((o) => new Date(o.date + 'T12:00:00').getUTCDay() === target.dow);
+      i = f < 0 ? 1 : f; when = WD[target.dow][0].toUpperCase() + WD[target.dow].slice(1);
+    }
+    summary = dayLine(i, when); used = [out[i]];
+  } else {
+    const n = Math.min(7, Math.max(1, daysOverride || parseDays(raw)));
+    const segs = [];
+    for (let i = 0; i < n; i++) {
+      const hi = r0(dy.temperature_2m_max[i]), sky = cond(dy.weather_code[i]), pop = dy.precipitation_probability_max[i];
+      segs.push(`${out[i].label} ${hi}°C ${sky}${Number.isFinite(pop) ? `, ${pop}% chance of rain` : ''}`);
+    }
+    summary = `${where}: ` + segs.join('; ') + `. Winds around ${r0(dy.wind_speed_10m_max[0])} km/h.`;
+    used = out.slice(0, n);
+  }
   return {
     intent: 'WEATHER_FORECAST', location: g.name, country: g.country, latitude: g.lat,
-    longitude: g.lon, forecast_days: dy.time.length, days: out, summary,
+    longitude: g.lon, forecast_days: used.length, days: used, summary,
     confidence: 0.95, source: 'open-meteo daily forecast', as_of: new Date().toISOString(),
   };
 }
@@ -293,8 +326,9 @@ export default {
       let days = parseInt(q.get('days') || '', 10);
       if (!Number.isFinite(days)) days = parseDays(raw);
       if (!Number.isFinite(days) || days < 1 || days > 7) days = 3;
+      const tgt = (parseTargetDay(raw) || {}).kind || `d${days}`;
       try {
-        const body = await memoized(`f:${days}:${place.toLowerCase()}`, () => forecast(place, days));
+        const body = await memoized(`f:${tgt}:${place.toLowerCase()}`, () => forecast(place, raw, days));
         return json(body, 200, 10);
       } catch (err) {
         const msg = String(err);

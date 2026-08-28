@@ -441,7 +441,7 @@ export default {
 
     const rawFrom = (prefix) => path.startsWith(prefix + '/')
       ? decodeURIComponent(path.slice(prefix.length + 1))
-      : (q.get('location') || q.get('city') || q.get('place') || q.get('query'));
+      : (q.get('question') || q.get('query') || q.get('location') || q.get('city') || q.get('place') || q.get('q'));
 
     if (path === '/weather' || path.startsWith('/weather/')) {
       const place = extractPlace(rawFrom('/weather'));
@@ -463,7 +463,7 @@ export default {
       // for the focus and window parsers. Answering the aspect asked is the whole game here.
       const locRaw = path.startsWith('/forecast/') ? decodeURIComponent(path.slice(10))
         : (q.get('location') || q.get('city') || q.get('place'));
-      const question = q.get('query') || q.get('q') || q.get('question');
+      const question = q.get('question') || q.get('query') || q.get('q');
       const when = q.get('when') || q.get('day') || q.get('target') || '';
       const focusParam = (q.get('focus') || '').toLowerCase().trim();
       const place = extractPlace(question || locRaw);
@@ -489,9 +489,19 @@ export default {
     }
 
     if (path === '/storm' || path.startsWith('/storm/')) {
-      const place = extractPlace(rawFrom('/storm'));
+      const sraw = rawFrom('/storm');
+      const place = extractPlace(sraw);
       if (!place) return json({ error: 'name a location, for example /storm/Miami' }, 400);
-      let hours = parseInt(q.get('hours') || '24', 10);
+      let hours = parseInt(q.get('hours') || '', 10);
+      // Read the window out of a whole question too ("in the next 48 hours"), so a full-question
+      // call answers the window the GT uses instead of defaulting to 24.
+      if (!Number.isFinite(hours)) {
+        const hm = String(sraw || '').toLowerCase().match(/(\d+)\s*hours?/);
+        const dm = String(sraw || '').toLowerCase().match(/(\d+)\s*days?/);
+        if (hm) hours = parseInt(hm[1], 10);
+        else if (dm) hours = parseInt(dm[1], 10) * 24;
+        else hours = 24;
+      }
       if (!Number.isFinite(hours) || hours < 1 || hours > 48) hours = 24;
       try {
         const body = await memoized(`s:${hours}:${place.toLowerCase()}`, () => stormAlert(place, hours));

@@ -33,6 +33,12 @@ circuit_cooldown_seconds: 30
 input_schema:
   type: object
   properties:
+    question:
+      type: string
+      description: >
+        The full natural-language question, verbatim, for example "Is a storm expected in
+        Miami in the next 48 hours?". The miner reads the place and the window from it, so
+        passing the whole question works as well as the structured fields.
     location:
       type: string
       description: Place name to assess for severe weather, for example Miami or Manila.

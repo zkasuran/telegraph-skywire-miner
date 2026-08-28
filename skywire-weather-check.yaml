@@ -30,6 +30,12 @@ circuit_cooldown_seconds: 30
 input_schema:
   type: object
   properties:
+    question:
+      type: string
+      description: >
+        The full natural-language question, verbatim, for example "What is the weather in
+        Paris right now?". The miner reads the place from it and answers current conditions,
+        so passing the whole question works as well as naming the place.
     location:
       type: string
       description: Place name to report current weather for, for example London or Tokyo.

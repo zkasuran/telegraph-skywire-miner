@@ -32,6 +32,13 @@ circuit_cooldown_seconds: 30
 input_schema:
   type: object
   properties:
+    question:
+      type: string
+      description: >
+        The full natural-language weather question, verbatim, for example "What is the
+        wind forecast for Cape Town tomorrow morning?" or "How much snow for Oslo over the
+        next two days?". The miner reads the day, the window and the aspect straight from
+        it and answers exactly that, so passing the whole question gives the best answer.
     location:
       type: string
       description: Place name to forecast for, for example London or Tokyo.

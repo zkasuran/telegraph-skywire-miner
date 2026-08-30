@@ -10,6 +10,18 @@
 // All data is open-meteo, which is keyless: geocoding to resolve a place name, then the
 // forecast API for current conditions and the daily outlook. No API key, no database.
 
+/**
+ * Licence: source-available, no derivatives. Copyright (c) 2026 zkasuran.
+ * SPDX-License-Identifier: LicenseRef-zkasuran-SAND-1.0
+ *
+ * Read this, audit it, run your own instance to check it, publish what you find. Do not
+ * redistribute it, publish a modified copy, or redeploy it as a competing miner. Calling
+ * the live endpoint is not restricted by the licence at all.
+ *
+ * Full terms: LICENSE. Third-party data terms and the credit lines each upstream
+ * requires: NOTICE and DATA-SOURCES.md. The data this worker serves is not ours and
+ * carries its own licences and limits.
+ */
 const GEO = 'https://geocoding-api.open-meteo.com/v1/search';
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 

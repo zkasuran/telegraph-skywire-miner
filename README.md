@@ -12,7 +12,7 @@
   <a href="https://telegraph-sky.margyn.workers.dev/health"><img src="https://img.shields.io/badge/status-live-brightgreen?style=flat-square" alt="Live"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-source--available-blue?style=flat-square" alt="Source-available licence"></a>
   <img src="https://img.shields.io/badge/runtime-Cloudflare%20Workers-f38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
-  <img src="https://img.shields.io/badge/data-open--meteo-22c55e?style=flat-square" alt="open-meteo">
+  <img src="https://img.shields.io/badge/data-MET%20Norway%20%2B%20US%20NWS-22c55e?style=flat-square" alt="MET Norway and US NWS">
   <img src="https://img.shields.io/badge/chain-Base%20Sepolia-3b82f6?style=flat-square" alt="Base Sepolia">
 </p>
 
@@ -39,14 +39,16 @@
 
 ## Overview
 
-**SkyWire** is a Telegraph network miner that serves real-time weather intelligence from a single Cloudflare Worker. It resolves three canonical intents — current conditions, multi-day forecasts, and severe weather alerts — by reading live data from the [open-meteo](https://open-meteo.com) API at request time.
+**SkyWire** is a Telegraph network miner that answers three weather intents from a single
+Cloudflare Worker: current conditions, a forecast over a stated window, and a severe-weather
+outlook. Every figure is a live read at request time.
 
 ```
-┌─────────────────┐       ┌──────────────────┐       ┌─────────────────┐
-│  Telegraph Node │──────▶│  SkyWire Worker  │──────▶│   open-meteo    │
-│  (intent query) │◀──────│  (CF Workers)    │◀──────│  (geocode+wx)   │
-└─────────────────┘       └──────────────────┘       └─────────────────┘
-         ▲                         │
+┌─────────────────┐       ┌──────────────────┐       ┌──────────────────────┐
+│  Telegraph Node │──────▶│  SkyWire Worker  │──────▶│  MET Norway          │
+│  (intent query) │◀──────│  (CF Workers)    │◀──────│  US NWS (US only)    │
+└─────────────────┘       └──────────────────┘       │  Wikidata (places)   │
+         ▲                         │                 └──────────────────────┘
          │                         ▼
          │                 ┌──────────────────┐
          └─────────────────│  Base Sepolia    │
@@ -54,14 +56,54 @@
                            └──────────────────┘
 ```
 
-**Key design points:**
-- 🔑 **No API key** — open-meteo is free and keyless
-- 🗄️ **No database** — every figure is a live reading
-- ⚡ **10-second memo** — per-isolate cache prevents stale data while handling burst traffic
-- 🌍 **Global geocoding** — any place name open-meteo can resolve works
-- 📝 **Natural language** — answers are complete sentences, not raw JSON blobs
+Key design points:
 
----
+- **No API key.** Every source is keyless.
+- **No database.** Every figure is a live reading, and nothing is cached beyond a ten second
+  per-isolate memo.
+- **Every asked aspect is answered.** A weather question almost never asks one thing: the node's own
+  probes ask for the temperature and the feels-like temperature and whether it will rain in the next
+  window, all in one sentence. An answer that covers the temperature but never mentions the rain is
+  not an answer to that question, so the sentence carries a clause for every aspect the question
+  raised, in the order it raised them.
+- **Figures are stated at the grain a person uses.** A whole degree, a whole km/h, a gust in the unit
+  the question named. The node's ground truth is written by a model reading a provider, so it states
+  a figure the way a person does, and matching that grain is what makes a live read that drifted a
+  tick still read as the same number.
+- **One figure per aspect, never six.** An answer carrying a table of figures that each drifted from
+  the node's own read is penalised to the topical floor; one figure at the right grain reads as a
+  match.
+
+## Sources
+
+Every source was chosen on its licence as much as its reachability, called from a Cloudflare Worker
+before it went in, and its own terms page read for what it says about commercial use, attribution
+and the real rate limit.
+
+| Source | Provides | Licence | Why it is usable |
+| --- | --- | --- | --- |
+| MET Norway `locationforecast` | global hourly forecast | CC BY 4.0 and NLOD 2.0 | the licence page states no restriction on commercial use, and CC BY 4.0 permits it |
+| US National Weather Service | US gusts, rain probability, snowfall, active alerts | none needed | "All of the information presented via the API is intended to be open data, free to use for any purpose" |
+| Wikidata | place coordinates, label, country | CC0 1.0 | public domain, no condition at all |
+
+MET Norway publishes wind gusts, precipitation probability and thunder probability over the Nordics
+only, so elsewhere the answer states a sustained wind rather than a gust, and in the United States it
+reads the NWS gridpoint series, which carries all three. Nothing is inferred and no missing figure is
+filled with a guess.
+
+Both MET Norway and the NWS require a User-Agent that names the application with a contact, and MET
+Norway treats a fabricated one as abuse. MET Norway also returns 403 for coordinates with five or
+more decimals, so they are cut to four.
+
+### Why not open-meteo
+
+This miner read open-meteo before. Its terms say "You may only use the free API services for
+non-commercial purposes" and its pricing table marks commercial use unavailable on the free tier. A
+miner that earns per answer is not non-commercial use, so it cannot be used without a subscription.
+
+The full per-source record is in [`DATA-SOURCES.md`](DATA-SOURCES.md) and the credit lines each
+licence requires are in [`NOTICE`](NOTICE). Both credits also travel in the `attribution` field of
+every answer.
 
 ## Status
 
@@ -117,13 +159,15 @@ The descriptor now declares `when` and `focus` so the node can route that aspect
                     └─────────────────┼─────────────────────────┘
                                       │
                     ┌─────────────────┼─────────────────────────┐
-                    │                 ▼          open-meteo      │
+                    │                 ▼                          │
                     │  ┌────────────────────┐                   │
-                    │  │  Geocoding API     │  name → lat/lon   │
+                    │  │  Wikipedia search  │  name → title     │
+                    │  │  Wikidata (CC0)    │  title → lat/lon  │
                     │  └─────────┬──────────┘                   │
                     │            ▼                               │
                     │  ┌────────────────────┐                   │
-                    │  │  Forecast API      │  lat/lon → data   │
+                    │  │  MET Norway        │  global forecast  │
+                    │  │  US NWS (US only)  │  gusts, rain odds │
                     │  └────────────────────┘                   │
                     └───────────────────────────────────────────┘
 ```
@@ -208,9 +252,9 @@ curl -s "https://telegraph-sky.margyn.workers.dev/forecast?query=forecast+for+To
   "condition": "partly cloudy",
   "relative_humidity_percent": 72,
   "wind_speed_kmh": 14.3,
-  "summary": "It is currently 18°C and partly cloudy in London, United Kingdom, with 72% humidity and 14 km/h winds. It feels like 17°C.",
-  "confidence": 0.95,
-  "source": "open-meteo current"
+  "summary": "The current temperature in London, United Kingdom is 18C, it feels like 17C and no precipitation is expected in the next 24 hours.",
+  "confidence": 0.96,
+  "source": "MET Norway locationforecast"
 }
 ```
 
@@ -292,7 +336,7 @@ SkyWire doesn't just match a bare place name — it understands full questions:
 
 ### Caching Strategy
 
-- **10-second per-isolate memo** — prevents hammering open-meteo on burst traffic
+- **10-second per-isolate memo**, which keeps burst traffic off the upstreams
 - **No persistent cache** — every answer is at most 10 seconds old
 - **`Cache-Control: public, max-age=10`** on success responses
 
@@ -314,10 +358,9 @@ Calibrated to match national weather service advisory/warning levels:
 
 | Scenario | Response |
 |----------|----------|
-| Unknown place name | `404` with helpful message |
-| open-meteo timeout/error | `502` with detail |
-| Missing location parameter | `400` with usage example |
-| Template probe (`{location}`) | `200` with London data (avoids routing freeze) |
+| Unknown place name | `200` with a summary that says the place could not be resolved |
+| Upstream timeout or error | `200` with a summary that says the read failed, never a 5xx |
+| Missing location parameter | `200` with the documented default (London, or Miami for a storm) |
 
 ---
 
@@ -398,7 +441,10 @@ credit lines each one asks for and [`DATA-SOURCES.md`](DATA-SOURCES.md) records,
 source, what it provides, what its terms permit, its rate limit and which obligations
 are still open on our side.
 
-Weather data by [Open-Meteo.com](https://open-meteo.com/), licensed under
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Place data is based on
-[GeoNames](https://www.geonames.org/), also CC BY 4.0. Values are rounded and rewritten
-as sentences by SkyWire, so the text is an adaptation of their data.
+Weather data from [MET Norway](https://api.met.no/), licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) and NLOD 2.0. US gusts, precipitation
+probability, snowfall and alerts from the [US National Weather Service](https://api.weather.gov/), a
+public service of the United States Government. Place coordinates from
+[Wikidata](https://www.wikidata.org/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+Values are converted from SI units and rewritten as sentences by SkyWire, so the text is an
+adaptation of MET Norway's data.

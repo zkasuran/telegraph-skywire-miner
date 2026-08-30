@@ -1,52 +1,82 @@
-# DATA-SOURCES
+# Data sources
 
-Where every number SkyWire publishes comes from and whether we are allowed to use it. SkyWire's own code is MIT, Copyright (c) 2026 zkasuran. The data is not ours and carries its own terms, recorded here and in NOTICE.
+Every figure this miner serves is a live read at request time. This file records, per source,
+what it provides, what its own terms say about commercial use and redistribution, what credit it
+requires and what its real rate limit is.
 
-Everything is read at request time with no API key and no stored dataset. The only two upstream endpoints are the `GEO` and `FORECAST` constants at the top of `worker.js`.
+Two rules were followed in writing it. A licence is only recorded when the provider's own terms
+page was read; where a page could not be read, that is stated as unverified rather than guessed.
+And every source was called from a Cloudflare Worker before it went in, because several hosts
+answer differently from a worker than from a laptop.
 
-| Host | What it provides | Licence | Attribution required | Commercial use | Rate limit |
+| Host | Provides | Licence | Commercial use | Attribution | Rate limit |
 | --- | --- | --- | --- | --- | --- |
-| api.open-meteo.com | current conditions, daily 7 day forecast, 3 day hourly series | CC-BY-4.0 | yes | not on the free keyless tier we use | 600/min, 5,000/hour, 10,000/day, 300,000/month |
-| geocoding-api.open-meteo.com | place name to coordinates, country, timezone | CC-BY-4.0 | yes | not on the free keyless tier we use | same free tier limits, max 100 results per request |
-| geonames.org | the place database behind Open-Meteo geocoding, never called directly | CC-BY-4.0 | yes | allowed | 10,000 credits/day, 1,000/hour per username |
+| api.met.no | Global hourly weather forecast (locationforecast 2.0) | CC BY 4.0 and Norwegian Licence for Open Government Data (NLOD) 2.0 | Permitted. The licence page states no restriction on commercial use, and CC BY 4.0 permits it. | Required. "Credit should be given to The Norwegian Meteorological Institute, shortened MET Norway, as the source of data." Suggested wording: "Data from MET Norway". | "Anything over 20 requests/second per application (total, not per client) requires special agreement." |
+| api.weather.gov | US wind gusts, precipitation probability, snowfall and active alerts | No licence needed: a work of the United States Government. | Permitted. "free to use for any purpose" and "we do not charge any fees for the usage of this service". | Not required. Credited anyway so a reader can check the figure. | "The rate limit is not public information, but allows a generous amount for typical use." |
+| www.wikidata.org | Place coordinates, canonical label and country | CC0 1.0 (public domain) | Permitted without condition. | Not required by CC0. Credited anyway. | No published limit for wbgetentities. One or two calls per uncached place, memoised for ten seconds. |
 
-## api.open-meteo.com
+## Per source
 
-`FORECAST = 'https://api.open-meteo.com/v1/forecast'`, three call shapes, one per intent. WEATHER_CHECK requests `current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_direction_10m` with `timezone=auto`. WEATHER_FORECAST requests the daily block (weather code, max and min temperature, precipitation probability and sum, max wind speed, max gusts, dominant wind direction, snowfall sum) over `forecast_days=7`, plus a 3 day hourly block only when the question is about wind or names a morning. STORM_ALERT requests a 3 day hourly block of weather code, gusts, precipitation, snowfall and apparent temperature, then walks the hours inside the asked window and grades them against fixed advisory and warning thresholds. WMO weather codes are mapped to plain words locally, so the sky condition text is ours and the code behind it is theirs.
+### api.met.no
 
-When it fails: `fetchJson` sets a 5 second `AbortSignal.timeout` and throws on any non-2xx. The route handler returns 502 with the upstream error string truncated to 160 characters, so a caller can tell a network failure from a bad place name. Nothing stale is served in place of a live read. The one soft failure is the optional hourly call in the forecast path, wrapped in `.catch(() => null)`, so a wind answer falls back to the daily maximum wind and dominant direction instead of erroring.
+Global hourly weather forecast (locationforecast 2.0).
 
-## geocoding-api.open-meteo.com
+What the terms say: "Norwegian Licence for Open Government Data (NLOD) 2.0" and "Creative Commons 4.0 BY International"
 
-`GEO = 'https://geocoding-api.open-meteo.com/v1/search'`, called with `count=1&language=en&format=json`. It runs first on every request because the forecast API takes coordinates. The resolved name and country are printed in the answer, so a typo landing on an obscure place is visible to whoever reads it.
+Commercial use: Permitted. The licence page states no restriction on commercial use, and CC BY 4.0 permits it.
 
-When it fails: an empty `results` array throws "could not find a place named X" and the handler returns 404. Any other failure is a 502. An unsubstituted path template such as `/weather/{location}` resolves to London and answers 200 rather than 400, because a 400 on a routing probe freezes the miner out for an epoch.
+Attribution: Required. "Credit should be given to The Norwegian Meteorological Institute, shortened MET Norway, as the source of data." Suggested wording: "Data from MET Norway".
 
-## geonames.org
+Credit line published in every answer:
 
-Never called. The Open-Meteo geocoding docs credit their place data to GeoNames under "Attribution", so the place names we publish are GeoNames-derived and carry the CC BY credit. The export page states "commercial usage is allowed" and asks for credit "with a link or another reference to GeoNames".
+    Data from MET Norway, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Values converted from SI units and summarised by SkyWire.
 
-## Caching and call volume
+Rate limit: "Anything over 20 requests/second per application (total, not per client) requires special agreement."
 
-A per-isolate `Map` memo holds each answer for 10 seconds, keyed by intent, parsed focus, window and lowercased place, so a burst on one place collapses to a single upstream pair. Success responses carry `Cache-Control: public, max-age=10`. There is no persistent store, no database and nothing that can go stale beyond 10 seconds.
+A User-Agent naming the application with a contact is mandatory and a fabricated one is treated as abuse. Coordinates are capped at four decimals: five or more returns 403. Wind gusts, precipitation probability and thunder probability are published over the Nordics only, which is why the answer states a sustained wind elsewhere.
 
-Each miner request costs two upstream calls, three when the hourly series is needed. The descriptors declare `rate_limit_per_sec: 20`, which at sustained load is 40 to 60 upstream calls per second or 2,400 to 3,600 per minute against a free ceiling of 600 per minute. Real traffic has been far below that. The leaderboard snapshot in the README records 941, 620 and 334 network requests across a full epoch for the three intents.
+### api.weather.gov
+
+US wind gusts, precipitation probability, snowfall and active alerts.
+
+What the terms say: "All of the information presented via the API is intended to be open data, free to use for any purpose."
+
+Commercial use: Permitted. "free to use for any purpose" and "we do not charge any fees for the usage of this service".
+
+Attribution: Not required. Credited anyway so a reader can check the figure.
+
+Credit line published in every answer:
+
+    Data from the US National Weather Service (api.weather.gov), a public service of the United States Government.
+
+Rate limit: "The rate limit is not public information, but allows a generous amount for typical use."
+
+A User-Agent is required and the docs ask for contact information in it. Read only for a place the caller named, in the United States, where MET Norway lacks the gust and probability fields.
+
+### www.wikidata.org
+
+Place coordinates, canonical label and country.
+
+What the terms say: "Creative Commons CC0 License", described as equivalent to "Public domain"
+
+Commercial use: Permitted without condition.
+
+Attribution: Not required by CC0. Credited anyway.
+
+Credit line published in every answer:
+
+    Place coordinates from Wikidata, CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/).
+
+Rate limit: No published limit for wbgetentities. One or two calls per uncached place, memoised for ten seconds.
+
+Wikipedia's search index resolves a name to a page title, which handles typos and disambiguation, and Wikidata supplies the published coordinate. Only the CC0 value is served; Wikipedia is the index, not the data.
 
 ## Compliance
 
-### Obligations we meet
+Met:
 
-1. Open-Meteo is credited in the README with a link to open-meteo.com. The licence is named as CC BY 4.0.
-2. NOTICE carries the exact credit lines for both Open-Meteo endpoints and for GeoNames, with the terms URL for each.
-3. Our own code ships the MIT licence text with the copyright notice.
+- api.met.no: the required credit line travels in every answer and in NOTICE.
+- api.weather.gov: the required credit line travels in every answer and in NOTICE.
+- www.wikidata.org: the required credit line travels in every answer and in NOTICE.
 
-### Open items
-
-1. **The free Open-Meteo tier is non-commercial only and this miner does not clearly qualify.** The terms say "You may only use the free API services for non-commercial purposes" and the pricing table marks commercial use unavailable on Free / Open-Access. All three descriptors set `min_price_usdc: 0.01`, so answers are sold on-chain. The miner is also entered in a hackathon with a cash prize pool. Open-Meteo's own list of commercial use includes "Integrating our service into commercial products or promotional activities" and their non-commercial carve-outs are private or non-profit sites, home automation, public research and educational content. We do not read this miner as sitting inside those carve-outs. Swap paths, in the order we would take them:
-   - Subscribe to Open-Meteo API Standard. It grants "a commercial use licence and an API key for the dedicated customer endpoint" at customer-api.open-meteo.com with 1 million calls per month. The pricing page names the tier but shows no price. Open-Meteo's own announcement post gives $29 per month for Standard and $99 for Professional. Only the host and an `&apikey=` parameter change, so the worker edit is two constants.
-   - Self-host. The Open-Meteo server is published on GitHub under AGPLv3 and the non-commercial term on the terms page is written against "the free API services" rather than the software.
-   - Move to a keyless source whose terms do not restrict commercial use. api.met.no Locationforecast from the Norwegian Meteorological Institute is CC BY 4.0 plus NLOD 2.0, keyless, asks for the credit "Data from MET Norway", requires an identifying User-Agent with contact details and states "Anything over 20 requests/second per application (total, not per client) requires special agreement". Nothing on their terms or licence pages restricts commercial use. For US points api.weather.gov states "All of the information presented via the API is intended to be open data, free to use for any purpose", with an unpublished rate limit. Geocoding is the harder half. Nominatim is ODbL with share-alike, allows "an absolute maximum of 1 request per second" and its policy says services whose primary function is geocoding must run their own instance, so it is a poor fit. The GeoNames web service allows commercial use at 10,000 credits per day but needs a `username`, so it is not keyless.
-2. **Attribution is missing from the data we serve.** Responses carry `source: "open-meteo current"` with no link and no licence link. CC BY asks for credit wherever the material appears. The fix is an `attribution` field on every response body plus a credit line on the `/` service page the descriptors publish as documentation.
-3. **GeoNames is not credited in the repo.** The README and the docs name Open-Meteo only. The line is in NOTICE now and belongs in the README too.
-4. **The README credit is missing two CC BY parts.** It names CC BY 4.0 without linking the licence and does not indicate that the data was changed. We round values, map WMO codes to words and render sentences, which is an adaptation.
-5. **The declared burst rate is above the free ceiling.** `rate_limit_per_sec: 20` in each descriptor allows 40 to 60 upstream calls per second against a documented 600 per minute and Open-Meteo reserves the right to block IP addresses that misuse the service without prior notice. Observed traffic has never approached it. Either lower the declared rate, widen the memo window or move to a tier with no per-minute cap.
+No open items: every source this miner calls permits the use, and every required credit line is published.

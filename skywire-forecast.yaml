@@ -24,7 +24,7 @@ limitations:
     value_num: 80
     operator: lte
 
-rate_limit_per_sec: 20
+rate_limit_per_sec: 2
 cache_ttl_sec: 10
 circuit_threshold: 5
 circuit_cooldown_seconds: 30
@@ -57,8 +57,6 @@ input_schema:
         Which aspect the question emphasises, if any: general, temperature, rain, wind,
         snow, storm. A wind question wants the wind, a snow question wants the snowfall.
         Leave empty for general conditions.
-  required:
-    - location
 
 output_schema:
   type: object
@@ -93,12 +91,6 @@ endpoints:
       freeze, temperature); the answer then leads with that aspect. ?days=1..7 sets a plain
       multi-day outlook. A whole natural-language question can be passed in ?query= instead
       and the day and aspect are parsed from it.
-  - path: /forecast/{location}
-    external_path: /forecast/{location}
-    method: GET
-    description: >
-      Same answer with the place in the path. An unsubstituted template resolves to
-      London rather than erroring.
 
 semantics:
   signal_mapping:

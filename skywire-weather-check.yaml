@@ -22,7 +22,7 @@ limitations:
     value_num: 80
     operator: lte
 
-rate_limit_per_sec: 20
+rate_limit_per_sec: 2
 cache_ttl_sec: 10
 circuit_threshold: 5
 circuit_cooldown_seconds: 30
@@ -39,8 +39,6 @@ input_schema:
     location:
       type: string
       description: Place name to report current weather for, for example London or Tokyo.
-  required:
-    - location
 
 output_schema:
   type: object
@@ -83,12 +81,6 @@ endpoints:
     description: >
       Current weather for one place, location as a query parameter (?location=London).
       Also accepts a whole question in ?query=.
-  - path: /weather/{location}
-    external_path: /weather/{location}
-    method: GET
-    description: >
-      Same answer with the place in the path. An unsubstituted template resolves to
-      London rather than erroring.
 
 semantics:
   signal_mapping:

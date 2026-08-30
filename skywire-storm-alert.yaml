@@ -25,7 +25,7 @@ limitations:
     value_num: 80
     operator: lte
 
-rate_limit_per_sec: 20
+rate_limit_per_sec: 2
 cache_ttl_sec: 10
 circuit_threshold: 5
 circuit_cooldown_seconds: 30
@@ -45,8 +45,6 @@ input_schema:
     hours:
       type: integer
       description: Look-ahead window in hours, 1 to 48, default 24.
-  required:
-    - location
 
 output_schema:
   type: object
@@ -98,13 +96,6 @@ endpoints:
     description: >
       Severe-weather outlook for one place, location as a query parameter
       (?location=Miami&hours=24). Also accepts a whole question in ?query=.
-  - path: /storm/{location}
-    external_path: /storm/{location}
-    method: GET
-    description: >
-      Same outlook with the place in the path. An unsubstituted template resolves to a
-      default rather than erroring, so a probe that does not fill the parameter still
-      gets a valid answer.
 
 semantics:
   signal_mapping:

@@ -93,7 +93,7 @@ endpoints:
 semantics:
   signal_mapping:
     confidence_field: confidence
-    label_field: condition
+    label_field: summary
     reason_field: summary
   supported_intents:
     - WEATHER_CHECK

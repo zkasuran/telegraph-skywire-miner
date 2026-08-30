@@ -109,7 +109,7 @@ endpoints:
 semantics:
   signal_mapping:
     confidence_field: risk
-    label_field: level
+    label_field: summary
     reason_field: summary
   supported_intents:
     - STORM_ALERT

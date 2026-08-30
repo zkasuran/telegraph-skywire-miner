@@ -1,0 +1,55 @@
+# NOTICE
+
+SkyWire's own code is MIT licensed, Copyright (c) 2026 zkasuran. This file records the third-party data the miner serves and the attribution obligations that travel with it.
+
+## api.open-meteo.com
+
+Provides the current conditions, the 7 day daily forecast and the 3 day hourly series behind WEATHER_CHECK, WEATHER_FORECAST and STORM_ALERT. Every temperature, wind figure, rain amount and hazard verdict SkyWire returns comes from this API.
+
+Licence: CC-BY-4.0. The licence page states "API data are offered under Attribution 4.0 International (CC BY 4.0)".
+
+Attribution is required. The licence page asks for a link "next to any location Open-Meteo data are displayed" and gives the anchor text "Weather data by Open-Meteo.com". CC BY 4.0 adds a link to the licence and an indication that changes were made. The line to publish:
+
+> Weather data by Open-Meteo.com (https://open-meteo.com/), licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Values are rounded and rewritten as sentences by SkyWire.
+
+Terms: https://open-meteo.com/en/terms
+Licence: https://open-meteo.com/en/licence
+
+## geocoding-api.open-meteo.com
+
+Provides place name to latitude, longitude, country and timezone. It runs first on every request, since the forecast API takes coordinates.
+
+Licence: CC-BY-4.0, under the same Open-Meteo licence page. The docs page credits its own source under "Attribution" as "Location data based on GeoNames".
+
+Attribution is required. The line to publish:
+
+> Location data by Open-Meteo.com (https://open-meteo.com/) based on GeoNames (https://www.geonames.org/), licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
+
+Terms: https://open-meteo.com/en/terms
+Source credit: https://open-meteo.com/en/docs/geocoding-api
+
+## geonames.org
+
+The place database behind the Open-Meteo geocoding API. SkyWire does not call geonames.org directly. The credit travels with the resolved place names we publish.
+
+Licence: CC-BY-4.0. The export page states the data carries a "cc-by licence (creative commons attributions license)". The about page footer reads "This work is licensed under a Creative Commons Attribution 4.0 License".
+
+Attribution: the export page says "You should give credit to GeoNames when using data or web services with a link or another reference to GeoNames". The line to publish:
+
+> Location data based on GeoNames (https://www.geonames.org/), licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
+
+Terms: https://www.geonames.org/export/
+
+## Upstream weather models
+
+Open-Meteo's licence page states it "utilises open-data from various national weather services including" DWD, ECMWF, NOAA NCEP, Meteo-France, JMA, the Norwegian Meteorological Institute and CMC, each with its own linked licence. SkyWire credits Open-Meteo, which is the party that licenses the API output to us. We read that listing and did not open each national licence, so nothing is claimed here about their individual terms.
+
+## Tier and limits
+
+SkyWire runs the free keyless Open-Meteo tier for both the forecast API and the geocoding API. That tier is non-commercial only. The terms page states "You may only use the free API services for non-commercial purposes". The pricing table marks commercial use unavailable on Free / Open-Access and available on API Standard, API Professional and API Enterprise. A subscription grants "a commercial use licence and an API key for the dedicated customer endpoint" at customer-api.open-meteo.com.
+
+Free tier call limits, quoted from the terms: "Less than 10'000 API calls per day, 5'000 per hour and 600 per minute." The pricing page adds a cap of 300,000 per month. Requests covering more than 10 weather variables or more than 2 weeks count as more than one call. The page says monthly limits are not enforced yet. Open-Meteo reserves "the right to block applications and IP addresses that misuse our service without prior notice".
+
+GeoNames free web services are capped at "10'000 credits daily limit per application (identified by the parameter 'username'), the hourly limit is 1000 credits". SkyWire does not use those services.
+
+The three SkyWire descriptors declare `rate_limit_per_sec: 20`. Each miner request makes two upstream calls, three when a wind question or a morning window also pulls the hourly series. Sustained traffic at the declared rate would exceed the 600 per minute free ceiling.

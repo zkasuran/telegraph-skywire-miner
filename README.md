@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://telegraph-sky.margyn.workers.dev/health"><img src="https://img.shields.io/badge/status-live-brightgreen?style=flat-square" alt="Live"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-source--available-blue?style=flat-square" alt="Source-available licence"></a>
   <img src="https://img.shields.io/badge/runtime-Cloudflare%20Workers-f38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
   <img src="https://img.shields.io/badge/data-open--meteo-22c55e?style=flat-square" alt="open-meteo">
   <img src="https://img.shields.io/badge/chain-Base%20Sepolia-3b82f6?style=flat-square" alt="Base Sepolia">
@@ -361,7 +361,7 @@ telegraph-skywire-miner/
 │   ├── forecast.md                # WEATHER_FORECAST intent docs
 │   ├── storm-alert.md             # STORM_ALERT intent docs
 │   └── verification.md            # Testing, scoring, and what rank means
-├── LICENSE                        # MIT
+├── LICENSE                        # source-available, see LICENSE-HISTORY.md
 └── README.md                      # You are here
 ```
 
@@ -380,8 +380,25 @@ telegraph-skywire-miner/
 
 ---
 
-## License
+## Licence
 
-[MIT](LICENSE) — Written for the Telegraph network by [zkasuran](https://github.com/zkasuran) with AI assistance (Claude, Anthropic).
+The worker source is the work of zkasuran under [`LICENSE`](LICENSE), the
+Source-Available No-Derivatives Licence 1.0. Read it, audit it, run your own instance
+to check it, publish what you find. Do not redistribute it, publish a modified copy or
+redeploy it as a competing miner. Calling the live endpoint is not restricted by the
+licence at all.
 
-Weather data provided by [open-meteo](https://open-meteo.com) (CC BY 4.0).
+Everything published here up to and including commit `f5ce86e55d5f1c829f2d4d99cfd6630d43e38814` was released under MIT
+and stays MIT for anyone who took a copy under it. That grant is not being withdrawn.
+[`LICENSE-HISTORY.md`](LICENSE-HISTORY.md) gives the boundary and why it moved.
+
+The data is not ours. Each upstream provider licenses it on its own terms, some of
+which restrict commercial use or redistribution. [`NOTICE`](NOTICE) carries the exact
+credit lines each one asks for and [`DATA-SOURCES.md`](DATA-SOURCES.md) records, per
+source, what it provides, what its terms permit, its rate limit and which obligations
+are still open on our side.
+
+Weather data by [Open-Meteo.com](https://open-meteo.com/), licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Place data is based on
+[GeoNames](https://www.geonames.org/), also CC BY 4.0. Values are rounded and rewritten
+as sentences by SkyWire, so the text is an adaptation of their data.

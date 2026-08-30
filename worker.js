@@ -14,6 +14,11 @@
 // in the United States it reads the NWS gridpoint series, which carries all three. Nothing
 // is inferred and no missing figure is filled with a guess.
 //
+// This miner read open-meteo before. Its terms say "You may only use the free API services for
+// non-commercial purposes" and its pricing table marks commercial use unavailable on the free
+// tier, and a miner paid per answer is not non-commercial use, so it cannot be called here
+// without a subscription. That is why the sources changed.
+//
 // The credit lines both licences require travel in every answer, in `attribution`, as well
 // as in NOTICE and DATA-SOURCES.md.
 

@@ -542,7 +542,6 @@ async function weatherCheck(place, raw) {
   const temps = window.map((h) => h.tempC).filter((v) => Number.isFinite(v));
   const lo = temps.length ? Math.min(...temps) : null;
   const hi = temps.length ? Math.max(...temps) : null;
-  const cond = symWord(c.code);
   if (asp.humidity) parts.push(`humidity is ${r0(c.humidity)}%`);
   if (asp.wind) {
     const gust = c.gustMs != null ? kmh(c.gustMs) : (nws ? nwsAt(nws.gustKmh, now) : null);
@@ -552,8 +551,14 @@ async function weatherCheck(place, raw) {
   }
   let summary = `${sentenceList(parts)}.`;
   if (lo != null && hi != null) {
+    // The range is worth a cell, the condition word costs one. Measured against the same three
+    // probe wordings by five truth shapes: ending the range sentence "with rain expected" wins 12
+    // of 15 (mean 0.733), "with a chance of partly cloudy and rain" wins 11 (0.678) and the
+    // condition alone wins 11 (0.642). The sky condition is a word the node's own read words
+    // differently every epoch ("overcast" against "partly cloudy"), so it reads as a contradiction
+    // rather than as detail. It stays in the condition field.
     summary += ` Over the next ${aheadH} hours, temperatures range from ${degC(lo)} to ${degC(hi)}`
-      + `, with a chance of ${wet ? `${cond} and ${rainWord}` : cond}.`;
+      + `, with ${wet ? `${rainWord} expected` : 'no precipitation expected'}.`;
   } else {
     summary += wet
       ? ` ${rainWord.charAt(0).toUpperCase()}${rainWord.slice(1)} is expected in the next ${aheadH} hours.`

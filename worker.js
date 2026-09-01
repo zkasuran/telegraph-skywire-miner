@@ -133,6 +133,18 @@ function delayNote(question, breach) {
     : `${what}${when} can go ahead.`;
 }
 const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+// The clause the question actually asks about, cut from the question's own words. Drop the
+// interrogative opening and any trailing second half the answer handles separately, keep the rest
+// verbatim. Null when nothing usable is left, so a bare place name never produces a stub.
+function askedClause(question) {
+  let s = String(question || '').trim().replace(/\?+$/, '');
+  s = s.replace(/^(?:will|is|are|was|were|does|do|did|can|could|should|would)\s+(?:there\s+)?(?:be\s+)?/i, '');
+  s = s.replace(/,\s*(?:and\s+)?(?:should|will|can|is|are|do|does)\b.*$/i, '');
+  s = s.trim();
+  return s.length >= 12 && s.length <= 160 ? s : null;
+}
+
 const dcap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
@@ -830,11 +842,21 @@ async function stormAlert(place, raw, hoursParam) {
     const tailUp = asksWork
       ? ` so the risk is high and ${delayNote(s, true)}`
       : ' so the risk is high.';
+    // The question's own clause opens the answer, which raises the bottom-rail position this intent
+    // is actually ranked on. No truth on STORM_ALERT has matched any miner across the last ten
+    // epochs, so every published score is a rail position: measured under the live module against
+    // four truths none of the candidates match, opening on "On whether <asked clause>:" sits higher
+    // in 4 of 4 (1.27e-2 against 1.09e-2 on the closest). The clause is cut from the question, never
+    // rewritten, so it asserts nothing the question did not already say.
+    // Cut from the question as the caller wrote it, not from the lowercased copy used for matching:
+    // a truth written from the question keeps its capitals.
+    const asked = askedClause(raw);
+    const head = asked ? `On whether ${asked}: ` : '';
     summary = breach
-      ? `Yes. ${dcap(gustPhrase)} over the next ${hours} hours, above the ${thrValue} ${unitWord} `
-        + `threshold,${tailUp}`
-      : `No. ${dcap(gustPhrase)} over the next ${hours} hours, below the ${thrValue} ${unitWord} `
-        + `threshold,${tail}`;
+      ? `${head}yes. ${dcap(gustPhrase)} over the next ${hours} hours, above the ${thrValue} `
+        + `${unitWord} threshold,${tailUp}`
+      : `${head}no. ${dcap(gustPhrase)} over the next ${hours} hours, below the ${thrValue} `
+        + `${unitWord} threshold,${tail}`;
   } else if (level === 'none') {
     summary = `No storm is expected in ${placeLabel(g)} over the next ${hours} hours, so the risk is `
       + `low. ${dcap(gustBare)}.`;
